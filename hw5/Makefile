@@ -1,8 +1,8 @@
 CC = cc
 
 #Note: Change -O to -g when using debugger.
-CFLAGS = -g -Wall
-#CFLAGS = -O -Wall
+#CFLAGS = -g -Wall
+CFLAGS = -O -Wall
 
 all:	hw5_6
 
