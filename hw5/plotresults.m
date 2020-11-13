@@ -3,17 +3,20 @@ results;
 MAXDEGREE = size(err_svd,1)+2;
 
 range = 3:MAXDEGREE;
+figure;
+subplot(211);
 semilogy(range, err_svd, 'k-x', range, err_eig, 'r-o');
 title('Errors');
 xlabel('degree');
 ylabel('error');
 legend('dgesvd', 'dsyev', 'Location','NorthWest');
-print -depsc errors.eps
 
-figure(2);
+subplot(212);
 semilogy(range, times_svd, 'k-x', range, times_eig, 'r-o');
 title('Execution Times');
 xlabel('degree');
 ylabel('times');
 legend('dgesvd', 'dsyev', 'Location','NorthWest');
-print -depsc times.eps
+
+print -dpng results.png
+

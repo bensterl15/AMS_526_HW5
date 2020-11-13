@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
+#include <string.h>
 
 /* All type definitions and function prototypes are in this header file. */
 #include "hw5_6.h"
@@ -36,6 +37,16 @@
 #define MAXPOINTS 30
 #define MAXMATRIXSIZE  450
 #define MAXRSIZE  225
+
+void print_matrix(Matrix M){
+    int m = M.m, n = M.n;
+    for(int i = 0; i < m; i++){
+        for(int j = 0; j < n; j++){
+            printf("%f ", M.vals[i][j]);
+        }
+        printf("\n");
+    }
+}
 
 int main(int argc, char **argv) 
 {   
@@ -171,9 +182,80 @@ void  lsqr_dgesvd(
     /* Compute x = V*inv(S)*U'*b, or equivalent
        x = sum_j ( U(:,j)'*b/sigma_j * V(:,j); */
 
+    /*
+    printf("\nA\n");
+    print_matrix(A);
+    printf("--\n");
+
+    print_matrix(U);
+
+    printf("--S:\n");
+    for(i = 0; i < n; i++) printf("%g\n", S[i]);
+    printf("--\n");
+
+    printf("V is %d x %d\n", VT.n, VT.m);
+    printf("U is %d x %d\n", U.m, U.n);
+    printf("A is %d x %d\n", A.m, A.n);
+    printf("b is %d\n", b.m);
+    printf("x is %d\n", x.m);
+    printf("m is %d and n is %d\n", m, n);
+    printf("--\n");
+    */
+
+    //Allocate vector and initialize to zero:    
+    Vector UT_b = allocate_vector(n);
+    memset(UT_b.vals, 0, n * sizeof(*UT_b.vals));
+    //Now calculate it:
+    for(j = 0; j < m; j++){
+        for(k = 0; k < n; k++){
+            UT_b.vals[k] += U.vals[j][k] * b.vals[j];
+        }
+    }
+
+    /* Print UT_b vector:
+    printf("--\n UT_b");
+    for(i = 0; i < n; i++) printf("%g\n", UT_b.vals[i]);
+    printf("--\n");
+    */
+
+    //Solve S * w = b for w:
+    Vector w = allocate_vector(n);
+    memset(w.vals, 0, n * sizeof(*w.vals));
+    //for(i = 0; i < n; i++) printf("%g\n", w.vals[i]);
+    for(i = 0; i < n; i++){
+        //if(S[i] < 0.0001) continue;
+        //else{
+            w.vals[i] = UT_b.vals[i] / S[i];
+            //printf("S[i] = %f\n", S[i]);
+        //} 
+    }
+    
+    /* Print w:
+    printf("--w:\n");
+    for(i = 0; i < n; i++) printf("%g\n", w.vals[i]);
+    printf("--\n");
+    */
+    
+    // Use memset to initialize x to zero:
+    memset(x.vals, 0, x.m * sizeof(*x.vals));
+    //Calculate x = Vw here:
+    for(i = 0; i < n; i++){
+        for(j = 0; j < n; j++){
+            x.vals[i] += VT.vals[j][i] * w.vals[j];
+        }
+    }
+
+    /* Print x:
+    printf("--x:\n");
+    for(i = 0; i < n; i++) printf("%g\n", x.vals[i]);
+    printf("--\n");
+    */
+
     deallocate_matrix(U);
     deallocate_matrix(VT);
     deallocate_matrix(Acopy);
+    deallocate_vector(UT_b);
+    deallocate_vector(w);
 
     return;
 }
@@ -192,6 +274,105 @@ void  lsqr_dsyev(
    const Vector b)
 {
     /* FIXME: Implement this function */
+
+    int m = A.m;
+    int n = A.n;
+
+    int i, j, k;
+
+    Matrix AT_A = allocate_matrix(n, n);
+
+    for(i = 0; i < n; i++){
+        for(j = 0; j < n; j++){
+            AT_A.vals[i][j] = 0;
+            for(k = 0; k < m; k++){
+                AT_A.vals[i][j] += A.vals[k][i] * A.vals[k][j];
+            }
+        }
+    }
+
+    /*
+    printf("--AT_A\n");
+    print_matrix(AT_A);
+    printf("--\n");
+    */
+    
+    Vector AT_b = allocate_vector(n);
+    memset(AT_b.vals, 0, n * sizeof(*AT_b.vals));
+
+    for(i = 0; i < n; i++){
+        for(j = 0; j < m; j++){
+            AT_b.vals[i] += A.vals[j][i] * b.vals[j];
+        }
+    }
+
+    int lda = n, info, lwork;
+    double wkopt;
+
+    //Store the eigenvalues here:
+    double work[5*MAXPOINTS];
+    double lambda[MAXPOINTS];
+
+    // Solve eigenproblem... Note once again because of Fortran Convention, we get AT_A becomes Q':
+    dsyev_( "Vectors", "Upper", &n, &AT_A.vals[0][0], &lda, lambda, work, &lwork, &info );
+    // Check for convergence
+    if( info > 0 ) {
+            printf( "The algorithm failed to compute eigenvalues.\n" );
+            exit( 1 );
+    }
+
+    //Print lambda:
+    /*
+    printf("--lambda:\n");
+    for(i = 0; i < n; i++) printf("%g\n", lambda[i]);
+    printf("--\n");
+    
+    printf("--\n");
+    print_matrix(AT_A);
+    printf("--\n");
+    */
+
+    //Solve QLQ'x = Ab:
+    Vector QTATb = allocate_vector(n);
+    memset(QTATb.vals, 0, n * sizeof(*QTATb.vals));
+
+    //LQ'x = Q'(ATb)
+    for(i = 0; i < n; i++){
+        for(j = 0; j < n; j++){
+            QTATb.vals[i] += AT_A.vals[i][j] * AT_b.vals[j];
+        }
+    }
+
+    //Q'x = inv(L)(Q'ATb)
+    Vector iLQTATb = allocate_vector(n);
+    memset(iLQTATb.vals, 0, n * sizeof(*iLQTATb.vals));
+    //Instead of literal diagonal multiplication, just scale each element in the vector:
+    for(int i = 0; i < n; i++) iLQTATb.vals[i] = QTATb.vals[i] / lambda[i];
+
+    /* Print x:
+    printf("--iLQTATb:\n");
+    for(i = 0; i < n; i++) printf("%g\n", iLQTATb.vals[i]);
+    printf("--\n");
+    */
+
+    memset(x.vals, 0, n * sizeof(*x.vals));
+    //x = Q(inv(L)Q'ATb)
+    for(i = 0; i < n; i++){
+        for(j = 0; j < n; j++){
+            x.vals[i] += AT_A.vals[j][i] * iLQTATb.vals[j];
+        }
+    }
+
+    /* Print x:
+    printf("--x:\n");
+    for(i = 0; i < n; i++) printf("%g\n", x.vals[i]);
+    printf("--\n");
+    */
+
+    deallocate_matrix(AT_A);
+    deallocate_vector(AT_b);
+    deallocate_vector(QTATb);
+
 }
 
 /*************************************************************

@@ -12,10 +12,8 @@ hw5_6.o: hw5_6.c
 hw5_6: hw5_6.o
 	$(CC) $< -o $@ -llapack -lblas -lm -lgfortran
 
-plot: plotresults.m results.m
-	octave -q -f --eval plotresults
-	epstopdf errors.eps
-	epstopdf times.eps
+plot:
+	octave plotresults.m
 
 clean:
 	rm -f hw5_6.o hw5_6
